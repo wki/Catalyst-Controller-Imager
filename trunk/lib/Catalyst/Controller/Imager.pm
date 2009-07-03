@@ -15,7 +15,7 @@ has root_dir       => (is => 'rw',
 has cache_dir      => (is => 'rw',
                        default => sub { undef } );
 has default_format => (is => 'rw',
-                       default => sub { 'jpg' });
+                       default => sub { 'jpg' } );
 has max_size       => (is => 'rw',
                        default => sub { 1000 } );
                        
@@ -119,25 +119,29 @@ sub generate_image :Private {
             next if ($key eq 'f' && !exists($imager_format_for{$value}));
             
             $option{$key} = $value;
-        } elsif (-d $c->path_to($self->root_dir, @path, $arg)) {
+        } elsif (-d $c->path_to('root', $self->root_dir, @path, $arg)) {
             # looks like a directory
             push @path, $arg;
-        } elsif (-f $c->path_to($self->root_dir, @path, $arg)) {
+        } elsif (-f $c->path_to('root', $self->root_dir, @path, $arg)) {
             # a file
             push @path, $arg;
             $file_found = 1;
             if ($arg =~ m{\.(\w+) \z}xms) {
                 $option{f} = $1;
             }
-        } elsif ($arg =~ m{\A (.+) \. (.+?) \z}xms &&
-                 -f ($c->path_to($self->root_dir, @path, $1))) {
+        } elsif ($arg =~ m{\A (.+) \. (\w+) \z}xms &&
+                 -f ($c->path_to('root', $self->root_dir, @path, $1))) {
             # a file plus conversion
             push @path, $1;
-            $option{f} = $2 if (exists($imager_format_for{$2}));
+            if (exists($imager_format_for{$2})) {
+                $option{f} = $2;
+            } else {
+                die "format not found.";
+            }
             $file_found = 1;
         } else {
             # silently ignore it
-            push @{$option{ignored}}, $arg;
+            # push @{$option{ignored}}, $arg;
         }
     }
     die "no image found" if (!$file_found);
@@ -156,7 +160,8 @@ sub generate_image :Private {
         # we cant caching and the cache directory is writable
         #
         $cache_path = $c->path_to( (map {"$_-$option{$_}"} sort keys(%option)), @path );
-        if (-f $cache_path && -M $cache_path > $c->path_to($self->root_dir, @path)) {
+        if (-f $cache_path && 
+            -M $cache_path > -M $c->path_to('root', $self->root_dir, @path)) {
             #
             # cache-hit! simply load.
             # clear the cache_path afterwards to avoid another write...
@@ -169,7 +174,7 @@ sub generate_image :Private {
         # process the image
         #
         my $img = Imager->new();
-        $img->read(file => $c->path_to($self->root_dir, @path)) or die "cannot load image";
+        $img->read(file => $c->path_to('root', $self->root_dir, @path)) or die "cannot load image";
 
         if ($option{w} && !$option{h}) {
             $img = $img->scale(xpixels => $option{w});
@@ -206,7 +211,7 @@ sub generate_image :Private {
     #
     if ($data) {
         my $types = MIME::Types->new();
-        $c->response->headers->content_type($types->mimeTypeOf($path[-1]) || $types->mimeTypeOf($option{f}) || 'image/unknown');
+        $c->response->headers->content_type($types->mimeTypeOf($option{f}) || $types->mimeTypeOf($path[-1]) || 'image/unknown');
         $c->response->body($data);
     } else {
         my $dump = '<pre>' . Data::Dumper->Dump([$file_found, \@args,\@path,\%option],[qw(file_found args path option)]) . '</pre>';
