@@ -19,6 +19,11 @@ ok(exists($Imager::formats{png}),  'png format is possible');
 ok(exists($Imager::formats{gif}),  'gif format is possible');
 ok(exists($Imager::formats{jpeg}), 'jpeg format is possible');
 
+BAIL_OUT('Imager.pm not configured as expected - please reinstall with gif, jpeg and png support!')
+    if (!exists($Imager::formats{png}) || 
+        !exists($Imager::formats{gif}) ||
+        !exists($Imager::formats{jpeg}) );
+
 #
 # test start
 #
