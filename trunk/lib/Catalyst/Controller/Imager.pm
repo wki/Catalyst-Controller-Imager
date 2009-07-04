@@ -37,13 +37,40 @@ Catalyst::Controller::Imager - Imager JS/CSS Files
     # DONE. READY FOR USE.
 
     # Just use it in your template:
-    # will deliver a 200 pixel wide version of some_image.png in jpg format
+    # will deliver a 200 pixel wide version of some_image.png as jpg
     <img src="/image/w-200/some_image.png.jpg" />
 
 =head1 DESCRIPTION
 
 Catalyst Controller that generates image files in any size you request and
 opttionally converts the image format.
+
+Possible options are:
+
+=over
+
+=item w-n
+
+specifies the width of the image to generate. The height is adjusted to
+maintain the same ratio as the original image. The maximum size is controlled
+by a configuration parameter C<max_size> that defaults to 1000.
+
+Can be used in conjunction with h-n
+
+=item h-n
+
+specifies the height of the image to generate. The width is adjusted to
+maintain the same ratio as the original image. The maximum size is controlled
+by a configuration parameter C<max_size> that defaults to 1000.
+
+Can be used in conjunction with w-n
+
+=item f-xxx
+
+specifies the format of the image to generate. An alternative way is to simply
+append the format after the image name as in the example above.
+
+=back
 
 =head1 CONFIGURATION
 
@@ -88,10 +115,11 @@ sub BUILD {
 
 =head2 generate_image
 
-the working horse that generates the image
+the working horse that generates the image, directly sets
+Catalyst's response body and headers
 
 input: $self, $c, @(image params from uri)
-output: a Imager object representing the image or undef in case of failure
+
 
 =cut
 
