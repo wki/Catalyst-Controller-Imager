@@ -1,15 +1,15 @@
-use Test::More tests => 19;
+use Test::More tests => 28;
 use Test::Exception;
 use Catalyst ();
 use FindBin;
 use Path::Class::File;
 use Imager;
+use Image::Info qw(image_info image_type dim);
 
 # setup our Catalyst :-)
 my $c = Catalyst->new();
 $c->setup_log();
 $c->setup_home("$FindBin::Bin");
-# warn "home = $FindBin::Bin"; exit;
 
 #
 # check available imager formats
@@ -45,6 +45,8 @@ is($controller->cache_dir, undef, 'default cache directory looks good');
 is($controller->default_format, 'jpg', 'default format sub looks good');
 is($controller->max_size, 1000, 'default max size looks good');
 
+### FIXME: clear cache directory, ensure cache keeps empty
+
 # try to load catalyst logo
 # original size = 171 x 244 pix
 # original format = png
@@ -53,14 +55,46 @@ lives_ok { $controller->generate_image($c, 'catalyst_logo.png') }
          'original file retrieval lives';
 ok(length($c->response->body) > 10000, 'size is reasonable');
 is($c->response->headers->content_type, 'image/png', 'MIME type looks OK');
-
+file_type_is('PNG');
+file_dimension_is(171,244);
 
 dies_ok { $controller->generate_image($c, 'rails_logo.png') }
          'unknown file retrieval dies';
 
-
+# convert to jpg - same size
 lives_ok { $controller->generate_image($c, 'catalyst_logo.png.jpg') }
          'converted file retrieval lives';
 ok(length($c->response->body) > 1000, 'size is reasonable');
 is($c->response->headers->content_type, 'image/jpeg', 'MIME type looks OK');
+file_type_is('JPEG');
+file_dimension_is(171,244);
 
+# convert to gif - same size
+lives_ok { $controller->generate_image($c, 'catalyst_logo.png.gif') }
+         'converted file retrieval lives';
+ok(length($c->response->body) > 10000, 'size is reasonable');
+is($c->response->headers->content_type, 'image/gif', 'MIME type looks OK');
+file_type_is('GIF');
+file_dimension_is(171,244);
+
+
+#
+# helper subs
+#
+sub file_type_is {
+    my $format = shift;
+    my $msg = shift || "file type is '$format'";
+    
+    my $image_type = image_type(\do{ $c->response->body });
+    ok(ref($image_type) eq 'HASH' &&
+       exists($image_type->{file_type}) &&
+       $image_type->{file_type} eq $format, $msg);
+}
+
+sub file_dimension_is {
+    my $w = shift;
+    my $h = shift;
+    my $msg = shift || "dimension is $w x $h pixels";
+
+    is_deeply([dim(image_info(\do { $c->response->body }))], [$w, $h], $msg);
+}

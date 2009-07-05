@@ -8,8 +8,6 @@ my $build = Module::Build->new(
         'perl'                  => '5.8.8',
         'Moose'                 => '0.74',
         'Catalyst::Runtime'     => '5.80',
-        'File::stat'            => '1.00',
-        'List::Util'            => '1.19',
         'Path::Class'           => '0.16',
         'FindBin'               => '1.47',
         'Test::Builder'         => '0.86',
@@ -18,6 +16,7 @@ my $build = Module::Build->new(
         'Test::Exception'       => '0.27',
         'Test::Harness'         => '3.14',
         'Imager'                => '0.67',
+        'Image::Info'           => '1.28',  # needed for testing only...
     },
     create_makefile_pl => 'traditional',
     create_readme => 1,

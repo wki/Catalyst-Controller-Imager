@@ -25,6 +25,8 @@ our %imager_format_for = (
     png => 'png',
 );
 
+### TODO: add some simple counters for cache_write, cache_hit counts...
+
 =head1 NAME
 
 Catalyst::Controller::Imager - Imager JS/CSS Files
@@ -185,7 +187,8 @@ sub generate_image :Private {
     my $cache_path;
     if ($self->cache_dir && -d $self->cache_dir && -w $self->cache_dir) {
         #
-        # we cant caching and the cache directory is writable
+        # we cant caching and the cache directory is writable,
+        # try to find it in cache.
         #
         $cache_path = $c->path_to( (map {"$_-$option{$_}"} sort keys(%option)), @path );
         if (-f $cache_path && 
@@ -197,8 +200,11 @@ sub generate_image :Private {
             $data = $cache_path->slurp();
             $cache_path = undef;
         }
-    } else {
+    }
+    
+    if (!$data) {
         #
+        # image not yet processed / not found in cache
         # process the image
         #
         my $img = Imager->new();
