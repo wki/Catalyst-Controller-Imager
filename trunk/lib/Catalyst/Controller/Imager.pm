@@ -18,14 +18,14 @@ has default_format => (is => 'rw',
                        default => sub { 'jpg' } );
 has max_size       => (is => 'rw',
                        default => sub { 1000 } );
+has thumbnail_size => (is => 'rw',
+                       default => sub { 80 } );
                        
-our %imager_format_for = ( ### FIXME: use Imager::def_guess_type() instead!
-    gif => 'gif',
-    jpg => 'jpeg',
-    png => 'png',
-);
-
-
+# our %imager_format_for = ( ### FIXME: use Imager::def_guess_type() instead!
+#     gif => 'gif',
+#     jpg => 'jpeg',
+#     png => 'png',
+# );
 
 =head1 NAME
 
@@ -171,8 +171,11 @@ sub BUILD {
 
 #
 # stash variables:
+#   - image_path   == relative path to original image
 #   - image        == Imager Object as soon as image is loaded
 #   - image_data   == binary image data after conversion or from cache
+#   - cache_path   == relative path to cached image
+#   - format       == format for conversion
 #   - scale        == { w => n, h => n, mode => min/max/fit }
 #   - before_scale == list of Sub-Refs executed before scaling
 #   - after_scale  == list of Sub-Regs executed after scaling
@@ -183,11 +186,14 @@ sub base :Chained :PathPrefix :CaptureArgs(0) {
     my ($self, $c) = @_;
     
     # init stash
-    $c->stash(image => undef);
-    $c->stash(image_data => undef);
-    $c->stash(scale => {w => undef, h => undef, mode => 'min'});
+    $c->stash(image_path   => []);
+    $c->stash(image        => undef);
+    $c->stash(image_data   => undef);
+    $c->stash(cache_path   => []);
+    $c->stash(scale        => {w => undef, h => undef, mode => 'min'});
+    $c->stash(format       => undef);
     $c->stash(before_scale => []);
-    $c->stash(after_scale => []);
+    $c->stash(after_scale  => []);
 }
 
 # second chain step -- eat up scaling parameter(s)
@@ -201,7 +207,9 @@ sub scale :Chained('base') :PathPart('') :CaptureArgs(1) {
     #$c->log->debug('captures: ' . join(',', @{$c->req->captures}));
     #$c->log->debug("capture=$capture");
     
-    my @args = split(qr{-+}xms, $capture);
+    push @{$c->stash->{cache_path}}, $capture;
+    
+    my @args = split(/-/, $capture);
     while (scalar(@args)) {
         my $action_name = 'want_' . shift @args;
         my $action = $c->controller->action_for($action_name);
@@ -216,37 +224,112 @@ sub scale :Chained('base') :PathPart('') :CaptureArgs(1) {
 
 # final chain step -- read image path relative to root_dir
 sub image :Chained('scale') :PathPart('') :Args {
-    my ($self, $c, @args) = @_;
+    my ($self, $c, @path) = @_;
 
-    $c->log->debug("args=" . join('|', @args));
+    die 'no file name given' if (!scalar(@path));
+    $c->log->debug("path=" . join('|', @path));
+    
+    push @{$c->stash->{cache_path}}, @path;
+    my $last_uri_part = pop @path;
+    my $file_name = $last_uri_part;
+    
+    if ($last_uri_part =~ m{\. (\w+) \z}xms) {
+        $c->stash->{format} ||= Imager::def_guess_type($1);
+    }
+    
+    while (!-f $c->path_to('root', $self->root_dir, @path, $file_name)) {
+        die 'requested image file not found' if ($file_name !~ s{\. \w+ \z}{}xms);
+    }
+    
+    push @{$c->stash->{image_path}}, @path, $file_name;
+    
+    $c->forward('convert_image');
 }
 
-# do the calculation
+# do the conversion
+sub convert_image :Action {
+    my ($self, $c) = @_;
+    
+    my $cache_dir  = $c->path_to($self->cache_dir);
+    my $cache_path = $c->path_to($self->cache_dir, $c->stash->{cache_path});
+    my $file_path  = $c->path_to('root', $self->root_dir, $c->stash->{image_path});
+    
+    if (-f $cache_path && -M $cache_path > -M $file_path) {
+        #
+        # caching wanted and cached image available
+        #
+        $c->stash->{image_data} = $cache_path->slurp();
+    } else {
+        #
+        # we must calculate
+        #
+        $c->stash->{image} = Imager->new();
+        $c->stash->{image}->read(file => $file_path) or die "cannot load image";
+        
+        ### before_scale -- TODO
+        
+        #
+        # scale
+        #
+        my $scale = $c->stash->{scale} || {};
+        if ($scale->{w} && !$scale{h}) {
+            $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale{w});
+        } elsif ($scale{h} && !$scale{w}) {
+            $c->stash->{image} = $c->stash->{image}->scale(ypixels => $scale{h});
+        } elsif ($scale{h} && $scale{w}) {
+            $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale{w}, 
+                                                           ypixels => $scale{h}, 
+                                                           type => 'min');
+        }
+
+        ### after_scale -- TODO
+        
+        #
+        # create destination image format
+        #
+        my $data;
+        $c->stash->{image}->write(type => $c->stash->{format} || 'jpeg', data => \$data);
+        $c->stash->{image_data} = $data;
+
+        #
+        # put into cache if wanted
+        #
+        if ($cache_path && -d $cache_dir && -w $cache_dir && $data) {
+            if (!-d $cache_path->dir) {
+                $cache_path->dir->mkpath();
+            }
+
+            if (open(my $cache_file, '>', $cache_path)) {
+                print $cache_file $data;
+                close($cache_file);
+            }
+        }
+    }
+}
+
+# deliver the data
 sub end :Action {
     my ($self, $c) = @_;
 
-    if (scalar(@{$c->error})) {
+    if (scalar(@{$c->error}) || !$c->stash->{image_data}) {
         $c->log->debug('error_encountered: ' . join(',', @{$c->error}));
         $c->clear_errors;
+        $c->response->body('image error...');
+        $c->response->status(404);
     } else {
-        # CALCULATE, SCALE, ...
+        my $types = MIME::Types->new();
+        my $mime = $types->mimeTypeOf($c->stash->{format});
+        $c->response->headers->content_type($mime || 'image/unknown');
+        $c->response->body($c->stash->{image_data});
     }
-    $c->request->body('done'); # testing...
 }
 
-
-# # helper: forward to an action
-# sub _forward {
-#     my ($self, $c, $name, @args) = @_;
-#     
-#     $c->forward("want_$name", @args);
-# }
 
 # examples
 sub want_thumbnail :Action :Args(0) {
     my ($self, $c) = @_;
     
-    $c->stash(scale => {w => 80, h => 80, mode => 'fit'});
+    $c->stash(scale => {w => $self->thumbnail_size, h => $self->thumbnail_size, mode => 'fit'});
 }
 
 sub want_w :Action :Args(1) {
@@ -287,146 +370,146 @@ input: $self, $c, @(image params from uri)
 
 =cut
 
-sub generate_image :Action {
-    my ( $self, $c, @args ) = @_;
-
-    #
-    # operate on options
-    #
-    my %option = (
-        format  => $self->default_format(),  # if image extension missing
-        width   => undef,                    # width unspecified
-        height  => undef,                    # height unspecified
-        scale   => 'min',                    # min scale mode, alt: max, crop
-        h_align => 'center',                 # vertically center aligned
-        v_align => 'middle',                 # hirizontally middle aligned
-    );
-
-    my @path;
-    my $file_found = 0;
-    
-    foreach my $arg (@args) {
-        if (my ($mode, $w, $h, @extras) = ($arg =~ m{\A (?:([sc])-)? (\d+) x (\d+) (?: -(\w+))* \z})) {
-            $option{scale} = ($mode && $mode eq 'c') ? 'crop' : 'min';
-        } elsif ($arg =~ m{\A (\w+) - (.*) \z}xms) {
-            # looks like an argument
-            my $key = $1;
-            my $value = $2;
-            
-            # simple sanity check for h,w
-            next if (($key eq 'h' || $key eq 'w') &&
-                     (!$value || $value !~ m{\A \d+ \z}xms || $value > $self->max_size()));
-            
-            # simple format checking
-            next if ($key eq 'f' && !exists($imager_format_for{$value}));
-            
-            $option{$key} = $value;
-        } elsif (-d $c->path_to('root', $self->root_dir, @path, $arg)) {
-            # looks like a directory
-            push @path, $arg;
-        } elsif (-f $c->path_to('root', $self->root_dir, @path, $arg)) {
-            # a file
-            push @path, $arg;
-            $file_found = 1;
-            if ($arg =~ m{\.(\w+) \z}xms) {
-                $option{f} = $1;
-            }
-        } elsif ($arg =~ m{\A (.+) \. (\w+) \z}xms &&
-                 -f ($c->path_to('root', $self->root_dir, @path, $1))) {
-            # a file plus conversion
-            push @path, $1;
-            if (exists($imager_format_for{$2})) {
-                $option{f} = $2;
-            } else {
-                die "format not found.";
-            }
-            $file_found = 1;
-        } else {
-            # silently ignore it
-            # push @{$option{ignored}}, $arg;
-        }
-    }
-    die "no image found" if (!$file_found);
-
-    #
-    # define some vars
-    #
-    my $data; # holds our image data (from cache or by transformation)
-    
-    #
-    # test for caching if wanted
-    #
-    my $cache_path;
-    if ($self->cache_dir && -d $self->cache_dir && -w $self->cache_dir) {
-        #
-        # we cant caching and the cache directory is writable,
-        # try to find it in cache.
-        #
-        $cache_path = $c->path_to( (map {"$_-$option{$_}"} sort keys(%option)), @path );
-        if (-f $cache_path && 
-            -M $cache_path > -M $c->path_to('root', $self->root_dir, @path)) {
-            #
-            # cache-hit! simply load.
-            # clear the cache_path afterwards to avoid another write...
-            #
-            $data = $cache_path->slurp();
-            $cache_path = undef;
-        }
-    }
-    
-    if (!$data) {
-        #
-        # image not yet processed / not found in cache
-        # process the image
-        #
-        my $img = Imager->new();
-        $img->read(file => $c->path_to('root', $self->root_dir, @path)) or die "cannot load image";
-
-        if ($option{w} && !$option{h}) {
-            $img = $img->scale(xpixels => $option{w});
-        } elsif ($option{h} && !$option{w}) {
-            $img = $img->scale(ypixels => $option{h});
-        } elsif ($option{h} && $option{w}) {
-            $img = $img->scale(xpixels => $option{w}, 
-                               ypixels => $option{h}, 
-                               type => 'min');
-        }
-
-        #
-        # create destination image format
-        #
-        $img->write(type => $imager_format_for{$option{f}}, data => \$data);
-    }
-    
-    #
-    # put into cache if wanted
-    #
-    if ($cache_path && $data) {
-        if (!-d $cache_path->dir) {
-            $cache_path->dir->mkpath();
-        }
-        
-        if (open(my $cache_file, '>', $cache_path)) {
-            print $cache_file $data;
-            close($cache_file);
-        }
-    }
-    
-    #
-    # deliver the data we generated
-    #
-    if ($data) {
-        my $types = MIME::Types->new();
-        $c->response->headers->content_type($types->mimeTypeOf($option{f}) || $types->mimeTypeOf($path[-1]) || 'image/unknown');
-        $c->response->body($data);
-    } else {
-        my $dump = '<pre>' . Data::Dumper->Dump([$file_found, \@args,\@path,\%option],[qw(file_found args path option)]) . '</pre>';
-        $c->response->body("nothing to output... $dump");
-    }
-    
-    #my $dump = '<pre>' . Data::Dumper->Dump([$file_found, \@args,\@path,\%option],[qw(file_found args path option)]) . '</pre>';
-    #$c->response->body($c->path_to(@root_dir) . "Matched Wittmann::Controller::Image in Image, $dump");
-}
+# sub generate_image :Action {
+#     my ( $self, $c, @args ) = @_;
+# 
+#     #
+#     # operate on options
+#     #
+#     my %option = (
+#         format  => $self->default_format(),  # if image extension missing
+#         width   => undef,                    # width unspecified
+#         height  => undef,                    # height unspecified
+#         scale   => 'min',                    # min scale mode, alt: max, crop
+#         h_align => 'center',                 # vertically center aligned
+#         v_align => 'middle',                 # hirizontally middle aligned
+#     );
+# 
+#     my @path;
+#     my $file_found = 0;
+#     
+#     foreach my $arg (@args) {
+#         if (my ($mode, $w, $h, @extras) = ($arg =~ m{\A (?:([sc])-)? (\d+) x (\d+) (?: -(\w+))* \z})) {
+#             $option{scale} = ($mode && $mode eq 'c') ? 'crop' : 'min';
+#         } elsif ($arg =~ m{\A (\w+) - (.*) \z}xms) {
+#             # looks like an argument
+#             my $key = $1;
+#             my $value = $2;
+#             
+#             # simple sanity check for h,w
+#             next if (($key eq 'h' || $key eq 'w') &&
+#                      (!$value || $value !~ m{\A \d+ \z}xms || $value > $self->max_size()));
+#             
+#             # simple format checking
+#             next if ($key eq 'f' && !exists($imager_format_for{$value}));
+#             
+#             $option{$key} = $value;
+#         } elsif (-d $c->path_to('root', $self->root_dir, @path, $arg)) {
+#             # looks like a directory
+#             push @path, $arg;
+#         } elsif (-f $c->path_to('root', $self->root_dir, @path, $arg)) {
+#             # a file
+#             push @path, $arg;
+#             $file_found = 1;
+#             if ($arg =~ m{\.(\w+) \z}xms) {
+#                 $option{f} = $1;
+#             }
+#         } elsif ($arg =~ m{\A (.+) \. (\w+) \z}xms &&
+#                  -f ($c->path_to('root', $self->root_dir, @path, $1))) {
+#             # a file plus conversion
+#             push @path, $1;
+#             if (exists($imager_format_for{$2})) {
+#                 $option{f} = $2;
+#             } else {
+#                 die "format not found.";
+#             }
+#             $file_found = 1;
+#         } else {
+#             # silently ignore it
+#             # push @{$option{ignored}}, $arg;
+#         }
+#     }
+#     die "no image found" if (!$file_found);
+# 
+#     #
+#     # define some vars
+#     #
+#     my $data; # holds our image data (from cache or by transformation)
+#     
+#     #
+#     # test for caching if wanted
+#     #
+#     my $cache_path;
+#     if ($self->cache_dir && -d $self->cache_dir && -w $self->cache_dir) {
+#         #
+#         # we cant caching and the cache directory is writable,
+#         # try to find it in cache.
+#         #
+#         $cache_path = $c->path_to( (map {"$_-$option{$_}"} sort keys(%option)), @path );
+#         if (-f $cache_path && 
+#             -M $cache_path > -M $c->path_to('root', $self->root_dir, @path)) {
+#             #
+#             # cache-hit! simply load.
+#             # clear the cache_path afterwards to avoid another write...
+#             #
+#             $data = $cache_path->slurp();
+#             $cache_path = undef;
+#         }
+#     }
+#     
+#     if (!$data) {
+#         #
+#         # image not yet processed / not found in cache
+#         # process the image
+#         #
+#         my $img = Imager->new();
+#         $img->read(file => $c->path_to('root', $self->root_dir, @path)) or die "cannot load image";
+# 
+#         if ($option{w} && !$option{h}) {
+#             $img = $img->scale(xpixels => $option{w});
+#         } elsif ($option{h} && !$option{w}) {
+#             $img = $img->scale(ypixels => $option{h});
+#         } elsif ($option{h} && $option{w}) {
+#             $img = $img->scale(xpixels => $option{w}, 
+#                                ypixels => $option{h}, 
+#                                type => 'min');
+#         }
+# 
+#         #
+#         # create destination image format
+#         #
+#         $img->write(type => $imager_format_for{$option{f}}, data => \$data);
+#     }
+#     
+#     #
+#     # put into cache if wanted
+#     #
+#     if ($cache_path && $data) {
+#         if (!-d $cache_path->dir) {
+#             $cache_path->dir->mkpath();
+#         }
+#         
+#         if (open(my $cache_file, '>', $cache_path)) {
+#             print $cache_file $data;
+#             close($cache_file);
+#         }
+#     }
+#     
+#     #
+#     # deliver the data we generated
+#     #
+#     if ($data) {
+#         my $types = MIME::Types->new();
+#         $c->response->headers->content_type($types->mimeTypeOf($option{f}) || $types->mimeTypeOf($path[-1]) || 'image/unknown');
+#         $c->response->body($data);
+#     } else {
+#         my $dump = '<pre>' . Data::Dumper->Dump([$file_found, \@args,\@path,\%option],[qw(file_found args path option)]) . '</pre>';
+#         $c->response->body("nothing to output... $dump");
+#     }
+#     
+#     #my $dump = '<pre>' . Data::Dumper->Dump([$file_found, \@args,\@path,\%option],[qw(file_found args path option)]) . '</pre>';
+#     #$c->response->body($c->path_to(@root_dir) . "Matched Wittmann::Controller::Image in Image, $dump");
+# }
 
 =head1 AUTHOR
 
