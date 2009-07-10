@@ -1,4 +1,4 @@
-use Test::More 'no_plan';
+use Test::More tests => 16;
 use Test::Exception;
 use Image::Info qw(image_info image_type dim);
 use FindBin;
@@ -13,21 +13,40 @@ my $controller = TestApp->controller('Image');
 is(ref($controller), 'TestApp::Controller::Image', 'Controller is OK');
 
 #
-# get a context object
+# get a context object and test mime-types
 #
 my ($res, $c) = ctx_request('/image/thumbnail/catalyst_logo.png');
 is( ref($c), 'TestApp', 'context is OK' );
+is( $res->content_type, 'image/png', 'MIME type is image/png');
+ok( $res->is_success, 'status is 200');
+
+# another format
+$res = request('/image/thumbnail/catalyst_logo.png.jpg');
+is( $res->content_type, 'image/jpeg', 'converted MIME type is image/jpeg');
+ok( $res->is_success, 'status is 200');
+
+# unknown uri
+$res = request('/image/nonsense/catalyst_logo.png');
+ok( $res->code(404), 'status is 404');
+$res = request('/image/thumbnail/rails_logo.png');
+ok( $res->code(404), 'status is 404');
 
 #
 # fire some requests
 #
 my $content;
 lives_ok { $content = get('/image/thumbnail/catalyst_logo.png'); }
-         'retrieval works';
-#die $content;
-ok(length($content) > 1000, 'length is OK');
-file_type_is('catalyst_logo.png', 'PNG');
-file_dimension_is('catalyst_logo.png', 56,80);
+         'thumbnail retrieval works';
+ok(length($content) > 1000, 'thumbnail length is OK');
+file_type_is('thumbnail/catalyst_logo.png', 'PNG');
+file_dimension_is('thumbnail/catalyst_logo.png', 56,80);
+
+undef $content;
+lives_ok { $content = get('/image/original/catalyst_logo.png'); }
+         'original retrieval works';
+ok(length($content) > 10000, 'original length is OK');
+file_type_is('original/catalyst_logo.png', 'PNG');
+file_dimension_is('original/catalyst_logo.png', 171,244);
 
 
 

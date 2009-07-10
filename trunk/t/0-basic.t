@@ -123,7 +123,7 @@ my @test_cases = (
 
 foreach my $test_case (@test_cases) {
     $c->stash(
-        image_path => 'catalyst_logo.png',
+        image_path => ['catalyst_logo.png'],
         format     => $test_case->{format},
         image_data => undef,
         scale      => { %{ $test_case->{scale} } },

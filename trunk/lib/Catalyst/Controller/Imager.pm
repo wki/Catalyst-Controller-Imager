@@ -21,12 +21,6 @@ has max_size       => (is => 'rw',
 has thumbnail_size => (is => 'rw',
                        default => sub { 80 } );
                        
-# our %imager_format_for = ( ### FIXME: use Imager::def_guess_type() instead!
-#     gif => 'gif',
-#     jpg => 'jpeg',
-#     png => 'png',
-# );
-
 =head1 NAME
 
 Catalyst::Controller::Imager - generate scaled or mangled images
@@ -38,7 +32,7 @@ Catalyst::Controller::Imager - generate scaled or mangled images
     
     # DONE. READY FOR USE.
     
-    ### TODO: describe configutation
+    ### TODO: describe configuration
 
     # Just use it in your template:
     # will deliver a 200 pixel wide version of some_image.png as jpg
@@ -47,6 +41,15 @@ Catalyst::Controller::Imager - generate scaled or mangled images
     # will deliver a 210 by 300 pixel sized image without conversion
     # (empty areas will be white)
     <img src="/image/w-210-h-300/other_image.jpg" />
+    
+    # define a manipulation of your own
+    <img src="/image/blur-9/some_image.png.jpg" />
+    
+    
+    # in your Controller you then need:
+    sub blur :Action :Args(1) {
+        ### do something to get a blurred image
+    }
 
 =head1 DESCRIPTION
 
@@ -87,6 +90,91 @@ Can be used in conjunction with w-n. However, if both options are given, the
 minimum of both will win in order to maintain the aspect ratio of the original
 image.
 
+=item thumbnail
+
+requests the generation of a thumbnail image. Defaults to a maximum size of
+C<thumbnail_size>. The size can get changed by a simple configuration
+parameter.
+
+=back
+
+=head1 INTERNALS
+
+This Base class defines a Chained dispatch chain consisting of the following
+Action methods. Each method is responsible for eating up a defined part of the
+URI. The URI always consists of 3 parts: The namespace, a format and size
+modifier and a relative path to the image in question optionally with another
+file extension added for format conversion.
+
+=head2 Action Chain
+
+=over
+
+=item base
+
+consumes the namespace of the controller inheriting this one.
+
+=item scale
+
+consumes a single URI part. If the part is a concatenation of several things
+joined with a dash '-', then these things are regarded as either arguments to
+an action or further actions with their arguments.
+
+If a modifier is named 'blur' and needs a single parameter, you may define a
+method like:
+
+    sub blur :Action :Args(1) {
+        # do something to blur
+    }
+
+During this stage, the only thing that happens is recording every modification
+into a series of stash-variables.
+
+=item image
+
+The final stage consumes the image path and tries to find the image in question.
+
+After the image is found, a forward to 'generate_image' is issued which does
+the conversion we want.
+
+=back
+
+=head2 Stash Variables
+
+=over
+
+=item image_path
+
+relative path to original image
+
+=item image
+
+Imager Object as soon as image is loaded
+
+=item image_data
+
+binary image data after conversion or from cache
+
+=item cache_path
+
+relative path to cached image
+
+=item format
+
+format for conversion
+
+=item scale
+
+{ w => n, h => n, mode => min/max/fit }
+
+=item before_scale
+
+list of Actions executed before scaling ### FIXME: action or subref???
+
+=item after_scale
+
+list of Actions executed after scaling ### FIXME: action or subref???
+
 =back
 
 =head1 EXTENDING
@@ -98,7 +186,7 @@ mangling itself will start.
 
 If you plan to offer URIs like:
 
-    /image/thumbnail/image.jpg
+    /image/small/image.jpg
     /image/size-200-300/image.jpg
     /image/watermark/image.jpg
     
@@ -110,10 +198,10 @@ If you plan to offer URIs like:
 
 you may build these action methods:
 
-    sub want_thumbnail :Action :Args(0) {
+    sub want_small :Action :Args(0) {
         my ($self, $c) = @_;
         
-        $c->stash(scale => {w => 80, h => 80, mode => 'fit'});
+        $c->stash(scale => {w => 200, h => 200, mode => 'fit'});
     }
 
     sub want_size :Action :Args(2) {
@@ -125,6 +213,7 @@ you may build these action methods:
     sub want_watermark :Action :Args(0) {
         my ($self, $c) = @_;
         
+        ### FIXME: action or subref???
         push @{$c->stash->{after_scale}}, \&watermark_generator;
     }
 
@@ -144,13 +233,9 @@ A simple configuration of your Controller could look like this:
         # specify a maximum value for width and height of images
         # defaults to 1000 pixels
         max_size => 1000,
-        
-        # maintain a list of allowed formats
-        # as a list of file-extensions
-        # default: jpg, gif and png
-        allowed_formats => [qw(jpg gif png)],
-        
+                
         ### TODO: imager_options
+        ### FIXME: more!
     );
 
 =head1 METHODS
@@ -168,18 +253,6 @@ sub BUILD {
     $c->log->warn(ref($self) . " - directory '" . $self->root_dir . "' not present.")
         if (!-d $c->path_to('root', $self->root_dir));
 }
-
-#
-# stash variables:
-#   - image_path   == relative path to original image
-#   - image        == Imager Object as soon as image is loaded
-#   - image_data   == binary image data after conversion or from cache
-#   - cache_path   == relative path to cached image
-#   - format       == format for conversion
-#   - scale        == { w => n, h => n, mode => min/max/fit }
-#   - before_scale == list of Actions executed before scaling
-#   - after_scale  == list of Actions executed after scaling
-#
 
 # start of our chain -- eats package namespace, eg. /image
 sub base :Chained :PathPrefix :CaptureArgs(0) {
@@ -201,7 +274,7 @@ sub base :Chained :PathPrefix :CaptureArgs(0) {
 }
 
 # second chain step -- eat up scaling parameter(s)
-# must be characters separated by '-'
+# must be things separated by '-'
 # if the first word matches an action, it is called with
 # the next x args depending on the :Arg() attribute of the
 # action called. As long as things remain more actions are invoked.
@@ -216,12 +289,10 @@ sub scale :Chained('base') :PathPart('') :CaptureArgs(1) {
     my @args = split(/-/, $capture);
     while (scalar(@args)) {
         my $action_name = 'want_' . shift @args;
-        # my $action = $c->controller->action_for($action_name);
         my $action = $self->action_for($action_name);
         die "unknown action: $action_name" if (!$action);
         
         my $nr_args = ($action->attributes->{Args} || [])->[0] || 0;
-        #$c->log->debug("action: $action_name: $action, args = $nr_args");
         
         $c->forward($action, [ splice(@args, 0, $nr_args) ]);
     }
@@ -234,7 +305,6 @@ sub image :Chained('scale') :PathPart('') :Args {
     my ($self, $c, @path) = @_;
 
     die 'no file name given' if (!scalar(@path));
-    $c->log->debug("path=" . join('|', @path));
     
     push @{$c->stash->{cache_path}}, @path;
     my $last_uri_part = pop @path;
@@ -335,7 +405,7 @@ sub end :Action {
     my ($self, $c) = @_;
 
     if (scalar(@{$c->error}) || !$c->stash->{image_data}) {
-        $c->log->debug('error_encountered: ' . join(',', @{$c->error}));
+        #$c->log->debug('error_encountered: ' . join(',', @{$c->error}));
         $c->response->body('image error...' . join(',', @{$c->error}));
         $c->response->status(404);
         $c->clear_errors;
