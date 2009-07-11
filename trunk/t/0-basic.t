@@ -11,6 +11,28 @@ my $c = Catalyst->new();
 $c->setup_log();
 $c->setup_home("$FindBin::Bin");
 
+{
+    no warnings;
+    # patch our Catalyst environment for testing
+    package Catalyst;
+    sub forward {
+        my ($c, $action, @args) = @_;
+        $action->{code}->($action->{self}, $c, @args);
+    };
+    
+    package Catalyst::Controller::Imager;
+    sub action_for {
+        my ($self, $name) = @_;
+        if ($self->can($name)) {
+            return {
+                code => $self->can($name),
+                self => $self,
+            };
+        }
+        die "cannot find $name as sub...";
+    };
+}
+
 #
 # check available imager formats
 #
@@ -74,7 +96,7 @@ is_deeply($c->stash,
 # get a not existing file
 #
 $c->stash(
-    image_path => 'rails_logo.png',
+    image_path => ['rails_logo.png'],
     format     => 'png',
     image_data => undef,
 );

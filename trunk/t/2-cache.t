@@ -1,35 +1,57 @@
-use Test::More 'no_plan'; #tests => 28;
+use Test::More tests => 9;
 use Test::Exception;
 use Catalyst ();
 use Catalyst::Controller::Imager;
 use FindBin;
 use Path::Class::File;
-use Imager;
-use Image::Info qw(image_info image_type dim);
+use Path::Class::Dir;
+#use Imager;
+#use Image::Info qw(image_info image_type dim);
 
 # setup our Catalyst :-)
 my $c = Catalyst->new();
 $c->setup_log();
 $c->setup_home("$FindBin::Bin");
 
+# empty cache
+my $cache_dir = Path::Class::Dir->new($FindBin::Bin, 'cache');
+$cache_dir->rmtree();
+$cache_dir->mkpath();
+ok(-d $cache_dir, 'Cache dir exists');
+ok(scalar($cache_dir->children) == 0, 'Cache is empty');
+
 my $controller;
 lives_ok { $controller = Catalyst->setup_component('Catalyst::Controller::Imager') }
          'setup component worked';
 
-### more things to come.
+# get a first file without caching
+$c->stash(
+    image_path => ['catalyst_logo.png'],
+    cache_path => ['catalyst_logo.png'],
+    format     => 'png',
+    image_data => undef,
+);
+lives_ok { $controller->convert_image($c) }
+         'file retrieval works';
+ok(scalar($cache_dir->children) == 0, 'Cache is empty');
 
-# clear cache, convert an image
-# --> cache-dir still must be empty
+# set cache directory
+$controller->cache_dir('cache');
+$c->stash->{image_data} = undef;
+lives_ok { $controller->convert_image($c) }
+         'file retrieval works';
+ok(scalar($cache_dir->children) == 1, 'Cache has 1 entry');
 
-# enable caching, convert an image
-# --> image must be in cache
-# --> cache-file must be newer and exactly identical with delivered one
+# fake a cache entry and see if it comes back
+# (silently assume catalyst logo is older than this test-timestamp...)
+open(my $file, '>', $cache_dir->file('catalyst_logo.png'))
+    or die 'cannot write faked cache file';
+print $file 'cached content blabla';
+close($file);
+# exit;
 
-# caching still enabled, set back original image-timestamp, convert image
-# --> image must still be in cache
-# --> image must come from cache and be identical with cache
-
-# caching still enabled, set cache image-timestamp past original, convert image
-# --> image must still be in cache
-# --> image must get converted and get updated into cache
+$c->stash->{image_data} = undef;
+lives_ok { $controller->convert_image($c) }
+         'file retrieval works';
+is($c->stash->{image_data}, 'cached content blabla', 'contend is from cache');
 

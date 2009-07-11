@@ -180,9 +180,24 @@ list of Actions executed after scaling ### FIXME: action or subref???
 =head1 EXTENDING
 
 The magic behind all the conversions is the existence of specially named
-action methods (their name starts with 'want_') that prepare a set of
-stash-variables. After all scaling options have been processed, the image
-mangling itself will start.
+action methods (their name starts with 'want_' or 'scale_').
+
+=over
+
+=item want_
+
+Actions starting with 'want_' get triggered if the URI part after the package
+namespace contains a word that matches the remainder of the action's name. The
+C<:Arg()> attribute specifies how many additional parts this action will et
+for its operation.
+
+=item scale_
+
+One part of the scaling hash inside stash is a scaling mode. Depending on
+the name of the scaling mode, an action named 'scale_mode' is used to
+process the scaling.
+
+=back
 
 If you plan to offer URIs like:
 
@@ -339,7 +354,7 @@ sub convert_image :Action {
                      : undef;
     my $file_path  = $c->path_to('root', $self->root_dir, @{$c->stash->{image_path}});
     
-    if ($cache_path && -f $cache_path && -M $cache_path > -M $file_path) {
+    if ($cache_path && -f $cache_path && -M $cache_path < -M $file_path) {
         #
         # caching wanted and cached image available
         #
@@ -358,17 +373,14 @@ sub convert_image :Action {
             for @{$c->stash->{before_scale}};
         
         #
-        # scale
+        # scale (if wanted)
         #
-        my $scale = $c->stash->{scale} || {};
-        if ($scale->{w} && !$scale->{h}) {
-            $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w});
-        } elsif ($scale->{h} && !$scale->{w}) {
-            $c->stash->{image} = $c->stash->{image}->scale(ypixels => $scale->{h});
-        } elsif ($scale->{h} && $scale->{w}) {
-            $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w}, 
-                                                           ypixels => $scale->{h}, 
-                                                           type => 'min');
+        my $scale = $c->stash->{scale};
+        if ($scale && ref($scale) eq 'HASH' && scalar(keys(%{$scale}))) {
+            my $scale_mode   = $c->stash->{scale}->{mode} || 'min';
+            my $scale_action = $self->action_for("scale_$scale_mode");
+            die "scale action 'scale_$scale_mode' not found." if (!$scale_action);
+            $c->forward($scale_action);
         }
 
         #
@@ -417,6 +429,38 @@ sub end :Action {
     }
 }
 
+#
+# default scaler
+#
+sub scale_min :Action {
+    my ($self, $c) = @_;
+
+    my $scale = $c->stash->{scale} || {};
+    if ($scale->{w} && !$scale->{h}) {
+        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w});
+    } elsif ($scale->{h} && !$scale->{w}) {
+        $c->stash->{image} = $c->stash->{image}->scale(ypixels => $scale->{h});
+    } elsif ($scale->{h} && $scale->{w}) {
+        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w}, 
+                                                       ypixels => $scale->{h}, 
+                                                       type => 'min');
+    }
+}
+
+sub scale_fit :Action {
+    my ($self, $c) = @_;
+
+    my $scale = $c->stash->{scale} || {};
+    if ($scale->{w} && !$scale->{h}) {
+        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w});
+    } elsif ($scale->{h} && !$scale->{w}) {
+        $c->stash->{image} = $c->stash->{image}->scale(ypixels => $scale->{h});
+    } elsif ($scale->{h} && $scale->{w}) {
+        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w}, 
+                                                       ypixels => $scale->{h}, 
+                                                       type => 'min');
+    }
+}
 
 # examples
 sub want_thumbnail :Action :Args(0) {
