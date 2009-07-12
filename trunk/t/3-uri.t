@@ -39,7 +39,7 @@ lives_ok { $content = get('/image/thumbnail/catalyst_logo.png'); }
          'thumbnail retrieval works';
 ok(length($content) > 1000, 'thumbnail length is OK');
 file_type_is('thumbnail/catalyst_logo.png', 'PNG');
-file_dimension_is('thumbnail/catalyst_logo.png', 56,80);
+file_dimension_is('thumbnail/catalyst_logo.png', 80,80);
 
 undef $content;
 lives_ok { $content = get('/image/original/catalyst_logo.png'); }

@@ -419,6 +419,7 @@ sub end :Action {
     if (scalar(@{$c->error}) || !$c->stash->{image_data}) {
         #$c->log->debug('error_encountered: ' . join(',', @{$c->error}));
         $c->response->body('image error...' . join(',', @{$c->error}));
+        $c->log->debug(join(',', @{$c->error}));
         $c->response->status(404);
         $c->clear_errors;
     } else {
@@ -430,50 +431,95 @@ sub end :Action {
 }
 
 #
-# default scaler
+# default scalers
 #
+
+# scale by minimum factor
 sub scale_min :Action {
     my ($self, $c) = @_;
 
     my $scale = $c->stash->{scale} || {};
-    if ($scale->{w} && !$scale->{h}) {
-        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w});
-    } elsif ($scale->{h} && !$scale->{w}) {
-        $c->stash->{image} = $c->stash->{image}->scale(ypixels => $scale->{h});
-    } elsif ($scale->{h} && $scale->{w}) {
-        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w}, 
-                                                       ypixels => $scale->{h}, 
-                                                       type => 'min');
-    }
+    $c->stash->{image} = _scale($c->stash->{image}, $scale->{w}, $scale->{h}, 'min');
 }
 
+# scale by maximum factor
+sub scale_max :Action {
+    my ($self, $c) = @_;
+
+    my $scale = $c->stash->{scale} || {};
+    $c->stash->{image} = _scale($c->stash->{image}, $scale->{w}, $scale->{h}, 'max');
+}
+
+# scale max into given area cropping afterwards
 sub scale_fit :Action {
     my ($self, $c) = @_;
 
     my $scale = $c->stash->{scale} || {};
-    if ($scale->{w} && !$scale->{h}) {
-        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w});
-    } elsif ($scale->{h} && !$scale->{w}) {
-        $c->stash->{image} = $c->stash->{image}->scale(ypixels => $scale->{h});
-    } elsif ($scale->{h} && $scale->{w}) {
-        $c->stash->{image} = $c->stash->{image}->scale(xpixels => $scale->{w}, 
-                                                       ypixels => $scale->{h}, 
-                                                       type => 'min');
+    my $w = $scale->{w};
+    my $h = $scale->{h};
+    my $image = _scale($c->stash->{image}, $w, $h, 'max');
+    
+    if ($w && $h && $image->getwidth >= $w && $image->getheight >= $h) {
+        # both are requested and too big
+        my $l = int(($image->getwidth - $w) / 2);
+        my $t = int(($image->getheight - $h) / 2);
+        $c->stash->{image} = $image->crop(left => $l, right => $l + $w,
+                                          top => $t, bottom => $t + $h);
+    } else {
+        $c->stash->{image} = $image;
     }
+}
+
+# scale min into given area filling with background color
+sub scale_fill :Action {
+    my ($self, $c) = @_;
+
+    my $scale = $c->stash->{scale} || {};
+    my $w = $scale->{w};
+    my $h = $scale->{h};
+    my $image = _scale($c->stash->{image}, $scale->{w}, $scale->{h}, 'min');
+    if ($w && $h && $image->getwidth <= $w && $image->getheight <= $h) {
+        # both are requested and too small
+        my $new_image = Imager->new(xsize => $w, ysize => $h, channels => $image->getchannels);
+        my $bgcolor = Imager::Color->new(255,255,255);
+        $new_image->box(color => $bgcolor,
+                        xmin => 0, ymin => 0,
+                        xmax => $w, ymax => $h,
+                        fill => 1);
+        my $l = int(($w - $image->getwidth) / 2);
+        my $t = int(($h - $image->getheight) / 2);
+        $c->stash->{image} = $new_image->compose(src => $image,
+                                                 tx => $l, ty => $t);
+    } else {
+        $c->stash->{image} = $image;
+    }
+}
+
+# scaling helper : returns new image of desired size
+sub _scale {
+    my ($image, $w, $h, $type) = @_;
+
+    my %options = (
+        ($w ? (xpixels => $w) : ()),
+        ($h ? (ypixels => $h) : ()),
+    );
+    $options{type} = $type || 'min' if ($w && $h);
+
+    return scalar(keys(%options)) ? $image->scale(%options) : $image;
 }
 
 # examples
 sub want_thumbnail :Action :Args(0) {
     my ($self, $c) = @_;
     
-    $c->stash(scale => {w => $self->thumbnail_size, h => $self->thumbnail_size, mode => 'fit'});
+    $c->stash(scale => {w => $self->thumbnail_size, h => $self->thumbnail_size, mode => 'fill'});
 }
 
 sub want_w :Action :Args(1) {
     my ($self, $c, $arg) = @_;
     
-    die 'width must be numeric' if ($arg =~ m{\A \d+ \z}xms);
-    die 'width out of range' if ($arg < 1 || $arg > $self->max_size);
+    die "width ($arg) must be numeric" if ($arg !~ m{\A \d+ \z}xms);
+    die "width ($arg) out of range" if ($arg < 1 || $arg > $self->max_size);
     
     $c->stash(scale => {w => $arg, mode => 'min'});
 }
@@ -481,8 +527,8 @@ sub want_w :Action :Args(1) {
 sub want_h :Action :Args(1) {
     my ($self, $c, $arg) = @_;
     
-    die 'height must be numeric' if ($arg =~ m{\A \d+ \z}xms);
-    die 'height out of range' if ($arg < 1 || $arg > $self->max_size);
+    die "height ($arg) must be numeric" if ($arg !~ m{\A \d+ \z}xms);
+    die "height ($arg) out of range" if ($arg < 1 || $arg > $self->max_size);
     
     $c->stash(scale => {h => $arg, mode => 'min'});
 }

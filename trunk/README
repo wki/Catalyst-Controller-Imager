@@ -1,0 +1,210 @@
+NAME
+    Catalyst::Controller::Imager - generate scaled or mangled images
+
+SYNOPSIS
+        # use the helper to create your Controller
+        script/myapp_create.pl controller Image Imager
+    
+        # DONE. READY FOR USE.
+    
+        ### TODO: describe configuration
+
+        # Just use it in your template:
+        # will deliver a 200 pixel wide version of some_image.png as jpg
+        <img src="/image/w-200/some_image.png.jpg" />
+    
+        # will deliver a 210 by 300 pixel sized image without conversion
+        # (empty areas will be white)
+        <img src="/image/w-210-h-300/other_image.jpg" />
+    
+        # define a manipulation of your own
+        <img src="/image/blur-9/some_image.png.jpg" />
+    
+        # in your Controller you then need:
+        sub blur :Action :Args(1) {
+            ### do something to get a blurred image
+        }
+
+DESCRIPTION
+    Catalyst Controller that generates image files in any size you request
+    and optionally converts the image format. Images are taken from a cache
+    directory if possible and desired or generated on the fly. The
+    Cache-directory has a structure that is very similar to the URI scheme,
+    so a redirect rule in your webserver's setup would do this job also.
+
+    Every single option that is desired is added to the URL of the image
+    requested to load. The format desired is simply added to the original
+    file name by appending `.ext' to the original file name.
+
+    A Controller that is derived from `Catalyst::Controller::Imager' may
+    define its own image conversion functions. See EXTENDING below.
+
+    Possible initially defined options are:
+
+    w-n specifies the width of the image to generate. The height is adjusted
+        to maintain the same ratio as the original image. The maximum size
+        is controlled by a configuration parameter `max_size' that defaults
+        to 1000.
+
+        Can be used in conjunction with h-n. However, if both options are
+        given, the minimum of both will win in order to maintain the aspect
+        ratio of the original image.
+
+    h-n specifies the height of the image to generate. The width is adjusted
+        to maintain the same ratio as the original image. The maximum size
+        is controlled by a configuration parameter `max_size' that defaults
+        to 1000.
+
+        Can be used in conjunction with w-n. However, if both options are
+        given, the minimum of both will win in order to maintain the aspect
+        ratio of the original image.
+
+    thumbnail
+        requests the generation of a thumbnail image. Defaults to a maximum
+        size of `thumbnail_size'. The size can get changed by a simple
+        configuration parameter.
+
+INTERNALS
+    This Base class defines a Chained dispatch chain consisting of the
+    following Action methods. Each method is responsible for eating up a
+    defined part of the URI. The URI always consists of 3 parts: The
+    namespace, a format and size modifier and a relative path to the image
+    in question optionally with another file extension added for format
+    conversion.
+
+  Action Chain
+
+    base
+        consumes the namespace of the controller inheriting this one.
+
+    scale
+        consumes a single URI part. If the part is a concatenation of
+        several things joined with a dash '-', then these things are
+        regarded as either arguments to an action or further actions with
+        their arguments.
+
+        If a modifier is named 'blur' and needs a single parameter, you may
+        define a method like:
+
+            sub blur :Action :Args(1) {
+                # do something to blur
+            }
+
+        During this stage, the only thing that happens is recording every
+        modification into a series of stash-variables.
+
+    image
+        The final stage consumes the image path and tries to find the image
+        in question.
+
+        After the image is found, a forward to 'generate_image' is issued
+        which does the conversion we want.
+
+  Stash Variables
+
+    image_path
+        relative path to original image
+
+    image
+        Imager Object as soon as image is loaded
+
+    image_data
+        binary image data after conversion or from cache
+
+    cache_path
+        relative path to cached image
+
+    format
+        format for conversion
+
+    scale
+        { w => n, h => n, mode => min/max/fit }
+
+    before_scale
+        list of Actions executed before scaling ### FIXME: action or
+        subref???
+
+    after_scale
+        list of Actions executed after scaling ### FIXME: action or
+        subref???
+
+EXTENDING
+    The magic behind all the conversions is the existence of specially named
+    action methods (their name starts with 'want_' or 'scale_').
+
+    want_
+        Actions starting with 'want_' get triggered if the URI part after
+        the package namespace contains a word that matches the remainder of
+        the action's name. The `:Arg()' attribute specifies how many
+        additional parts this action will et for its operation.
+
+    scale_
+        One part of the scaling hash inside stash is a scaling mode.
+        Depending on the name of the scaling mode, an action named
+        'scale_mode' is used to process the scaling.
+
+    If you plan to offer URIs like:
+
+        /image/small/image.jpg
+        /image/size-200-300/image.jpg
+        /image/watermark/image.jpg
+    
+        # or a combination of them:
+        /image/size-200-300-watermark/image.jpg
+    
+        # but not invalid things:
+        /image/size-200/image.jpg
+
+    you may build these action methods:
+
+        sub want_small :Action :Args(0) {
+            my ($self, $c) = @_;
+        
+            $c->stash(scale => {w => 200, h => 200, mode => 'fit'});
+        }
+
+        sub want_size :Action :Args(2) {
+            my ($self, $c, $w, $h) = @_;
+        
+            $c->stash(scale => {w => $w, h => $h, mode => 'fit'});
+        }
+    
+        sub want_watermark :Action :Args(0) {
+            my ($self, $c) = @_;
+        
+            ### FIXME: action or subref???
+            push @{$c->stash->{after_scale}}, \&watermark_generator;
+        }
+
+CONFIGURATION
+    A simple configuration of your Controller could look like this:
+
+        __PACKAGE__->config(
+            # the directory to look for files (inside root)
+            # defaults to 'static/images'
+            root_dir => 'static/images',
+        
+            # specify a cache dir if caching is wanted
+            # defaults to no caching (more expensive)
+            cache_dir => undef,
+        
+            # specify a maximum value for width and height of images
+            # defaults to 1000 pixels
+            max_size => 1000,
+                
+            ### TODO: imager_options
+            ### FIXME: more!
+        );
+
+METHODS
+  BUILD
+
+    constructor for this Moose-driven class
+
+AUTHOR
+    Wolfgang Kinkeldei, <wolfgang@kinkeldei.de>
+
+LICENSE
+    This library is free software, you can redistribute it and/or modify it
+    under the same terms as Perl itself.
+
