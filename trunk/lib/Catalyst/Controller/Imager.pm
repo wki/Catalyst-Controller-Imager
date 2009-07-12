@@ -32,8 +32,8 @@ Catalyst::Controller::Imager - generate scaled or mangled images
     
     # DONE. READY FOR USE.
     
-    ### TODO: describe configuration
-
+    
+    
     # Just use it in your template:
     # will deliver a 200 pixel wide version of some_image.png as jpg
     <img src="/image/w-200/some_image.png.jpg" />
@@ -41,30 +41,67 @@ Catalyst::Controller::Imager - generate scaled or mangled images
     # will deliver a 210 by 300 pixel sized image without conversion
     # (empty areas will be white)
     <img src="/image/w-210-h-300/other_image.jpg" />
+
+    # will deliver a 80 by 80 pixel sized image
+    # (empty areas will be white)
+    <img src="/image/thumbnail/other_image.jpg" />
     
-    # define a manipulation of your own
+    # define a modifier of your own
     <img src="/image/blur-9/some_image.png.jpg" />
+    
+    # your modifier plus a predefined one
+    <img src="/image/thumbnail-blur-9/some_image.png.jpg" />
+
+    # same thing as above
+    <img src="/image/blur-9-thumbnail/some_image.png.jpg" />
+    
     
     
     # in your Controller you then need:
-    sub blur :Action :Args(1) {
+    sub want_blur :Action :Args(1) {
         ### do something to get a blurred image
     }
 
 =head1 DESCRIPTION
 
-Catalyst Controller that generates image files in any size you request and
+A Catalyst Controller that generates image files in any size you request and
 optionally converts the image format. Images are taken from a cache directory
 if possible and desired or generated on the fly. The Cache-directory has a
 structure that is very similar to the URI scheme, so a redirect rule in your
 webserver's setup would do this job also.
 
-Every single option that is desired is added to the URL of the image requested
-to load. The format desired is simply added to the original file name by
-appending C<.ext> to the original file name.
+The URI of an image consists of always the same parts:
+
+=over
+
+=item the action namespace
+
+If your Controller is named C<MyApp::Controller::Image>, this first part will
+be C<image>.
+
+=item modifier(s)
+
+Here a series of modifiers and arguments separated with single dashes ('-')
+are used.
+
+    h-100        # will request an image's height
+    w-200        # will request an image's width
+    h-80-w-20    # both, height and width will apply
+    thumbnail    # a configurable square (defaults to 80)
+
+=item image path
+
+This is the relative path to the image that should get rendered
+
+=item extension (optional)
+
+If an additional option like C<.gif> is added immediately after the image
+path, this format is requested for delivery.
+
+=back
 
 A Controller that is derived from C<Catalyst::Controller::Imager> may define
-its own image conversion functions. See EXTENDING below.
+its own modifier functions. See EXTENDING below.
 
 Possible initially defined options are:
 
@@ -77,8 +114,8 @@ maintain the same ratio as the original image. The maximum size is controlled
 by a configuration parameter C<max_size> that defaults to 1000.
 
 Can be used in conjunction with h-n. However, if both options are given, the
-minimum of both will win in order to maintain the aspect ratio of the original
-image.
+image will scale to fill the given area either by width or by height, get
+centered inside the area and additional spaces will get filled with white.
 
 =item h-n
 
@@ -87,8 +124,8 @@ maintain the same ratio as the original image. The maximum size is controlled
 by a configuration parameter C<max_size> that defaults to 1000.
 
 Can be used in conjunction with w-n. However, if both options are given, the
-minimum of both will win in order to maintain the aspect ratio of the original
-image.
+image will scale to fill the given area either by width or by height, get
+centered inside the area and additional spaces will get filled with white.
 
 =item thumbnail
 
@@ -98,9 +135,47 @@ parameter.
 
 =back
 
+=head2 Configuration
+
+A simple configuration of your Controller could look like this:
+
+    __PACKAGE__->config(
+        # the directory to look for files (inside root)
+        # defaults to 'static/images'
+        root_dir => 'static/images',
+        
+        # specify a cache dir if caching is wanted
+        # defaults to no caching (more expensive)
+        cache_dir => undef,
+        
+        # specify a format that will get delivered if
+        # not guessable from the file extension
+        # defaults to 'jpg'
+        default_format => 'jpg'
+        
+        # specify a maximum value for width and height of images
+        # defaults to 1000 pixels
+        max_size => 1000,
+                
+        # specify the size of thumbnails (always square)
+        # defaults to 80 pixels
+        thumbnail_size => 80,
+    );
+
+=head2 Caching
+
+If caching is enabled (by setting the C<cache_dir> configuration parameter),
+every image rendered will get saved into the cache directory if it exists and
+the directory is writable.
+
+The path of a cached image inside the cache directory is identical to the URI
+part after the action namespace. Thus, a properly configured webserver might
+take over the responsibility to deliver static images from cache removing the
+burden from your Catalyst Controller.
+
 =head1 INTERNALS
 
-This Base class defines a Chained dispatch chain consisting of the following
+This base class defines a Chained dispatch chain consisting of the following
 Action methods. Each method is responsible for eating up a defined part of the
 URI. The URI always consists of 3 parts: The namespace, a format and size
 modifier and a relative path to the image in question optionally with another
@@ -108,7 +183,11 @@ file extension added for format conversion.
 
 =head2 Action Chain
 
-=over
+To allow easy modification the URI dispatching is left to Catalyst. The
+following C<:Chained> actions each work on a stage of the image construction.
+The final image will get delivered by the C<end> action.
+
+=over 8
 
 =item base
 
@@ -141,7 +220,10 @@ the conversion we want.
 
 =head2 Stash Variables
 
-=over
+All action methods communicate with each other by setting or retrieving stash
+variables.
+
+=over 16
 
 =item image_path
 
@@ -165,7 +247,7 @@ format for conversion
 
 =item scale
 
-{ w => n, h => n, mode => min/max/fit }
+{ w => n, h => n, mode => min/max/fit/fill }
 
 =item before_scale
 
@@ -182,13 +264,13 @@ list of Actions executed after scaling ### FIXME: action or subref???
 The magic behind all the conversions is the existence of specially named
 action methods (their name starts with 'want_' or 'scale_').
 
-=over
+=over 8
 
 =item want_
 
 Actions starting with 'want_' get triggered if the URI part after the package
 namespace contains a word that matches the remainder of the action's name. The
-C<:Arg()> attribute specifies how many additional parts this action will et
+C<:Arg()> attribute specifies how many additional parts this action will need
 for its operation.
 
 =item scale_
@@ -216,13 +298,13 @@ you may build these action methods:
     sub want_small :Action :Args(0) {
         my ($self, $c) = @_;
         
-        $c->stash(scale => {w => 200, h => 200, mode => 'fit'});
+        $c->stash(scale => {w => 200, h => 200, mode => 'fill'});
     }
 
     sub want_size :Action :Args(2) {
         my ($self, $c, $w, $h) = @_;
         
-        $c->stash(scale => {w => $w, h => $h, mode => 'fit'});
+        $c->stash(scale => {w => $w, h => $h, mode => 'fill'});
     }
     
     sub want_watermark :Action :Args(0) {
@@ -232,32 +314,7 @@ you may build these action methods:
         push @{$c->stash->{after_scale}}, \&watermark_generator;
     }
 
-=head1 CONFIGURATION
-
-A simple configuration of your Controller could look like this:
-
-    __PACKAGE__->config(
-        # the directory to look for files (inside root)
-        # defaults to 'static/images'
-        root_dir => 'static/images',
-        
-        # specify a cache dir if caching is wanted
-        # defaults to no caching (more expensive)
-        cache_dir => undef,
-        
-        # specify a maximum value for width and height of images
-        # defaults to 1000 pixels
-        max_size => 1000,
-                
-        ### TODO: imager_options
-        ### FIXME: more!
-    );
-
 =head1 METHODS
-
-=head2 BUILD
-
-constructor for this Moose-driven class
 
 =cut
 
@@ -269,7 +326,12 @@ sub BUILD {
         if (!-d $c->path_to('root', $self->root_dir));
 }
 
-# start of our chain -- eats package namespace, eg. /image
+=head2 base :Chained :PathPrefix :CaptureArgs(0)
+
+start of the action chain -- eats package namespace, eg. /image
+
+=cut
+
 sub base :Chained :PathPrefix :CaptureArgs(0) {
     my ($self, $c) = @_;
     
@@ -288,11 +350,24 @@ sub base :Chained :PathPrefix :CaptureArgs(0) {
     $c->stash(after_scale  => []);               # actions to run after scale
 }
 
-# second chain step -- eat up scaling parameter(s)
-# must be things separated by '-'
-# if the first word matches an action, it is called with
-# the next x args depending on the :Arg() attribute of the
-# action called. As long as things remain more actions are invoked.
+=head2 scale :Chained('base') :PathPart('') :CaptureArgs(1)
+
+second chain step -- eat up modifier parameter(s)
+
+Modifier parameters and their args must be separated by single dashes ('-').
+For every modifier there must exist an action named C<want_modifiername>
+declared with the number of args it wants to consume
+
+    # modifier 'h', one argument
+    # eg h-200
+    sub want_h :Action :Arg(1)
+    
+    # modifier 'size, two arguments
+    # eg size-300-200
+    sub want_size :Action :Arg(2)
+
+=cut
+
 sub scale :Chained('base') :PathPart('') :CaptureArgs(1) {
     my ($self, $c, $capture) = @_;
     
@@ -313,9 +388,13 @@ sub scale :Chained('base') :PathPart('') :CaptureArgs(1) {
     }
 }
 
-# final chain step
-# - consume image path relative to root_dir
-# - plus optional format extension for conversion
+=head2 image :Chained('scale') :PathPart('') :Args
+
+final chain step --consumes image path relative to root_dir plus optional
+format extension for conversion
+
+=cut
+
 sub image :Chained('scale') :PathPart('') :Args {
     my ($self, $c, @path) = @_;
 
@@ -341,8 +420,12 @@ sub image :Chained('scale') :PathPart('') :Args {
     $c->forward('convert_image');
 }
 
-# do the conversion
-# all args in stash
+=head2 convert_image :Action
+
+The converting function. Consumes all conversion-relevant parameters from
+stash and does the conversion (or delivers a file from stash).
+
+=cut
 sub convert_image :Action {
     my ($self, $c) = @_;
     
@@ -412,7 +495,18 @@ sub convert_image :Action {
     }
 }
 
-# deliver the data
+=head2 end :Action
+
+deliver the data or fire a 404-status in case something went wrong.
+
+Yes, I know, a 404 means 'not found', but for the end-user there is no
+difference between a not found image and an error that occured. And basically
+if somebody puts rubbush into the URL and calling an unknown action internally
+is a Internal server error, but for the end-user the requested image and its
+modification could not get retrieved.
+
+=cut
+
 sub end :Action {
     my ($self, $c) = @_;
 
@@ -430,11 +524,15 @@ sub end :Action {
     }
 }
 
-#
-# default scalers
-#
+################################################# SCALERs
 
-# scale by minimum factor
+=head2 scale_min :Action
+
+scales an image by the minimum scaling factor needed to either match the
+desired width or height.
+
+=cut
+
 sub scale_min :Action {
     my ($self, $c) = @_;
 
@@ -442,7 +540,13 @@ sub scale_min :Action {
     $c->stash->{image} = _scale($c->stash->{image}, $scale->{w}, $scale->{h}, 'min');
 }
 
-# scale by maximum factor
+=head2 scale_max :Action
+
+scales an image by the maximum scaling factor needed to either match the
+desired width or height.
+
+=cut
+
 sub scale_max :Action {
     my ($self, $c) = @_;
 
@@ -450,7 +554,13 @@ sub scale_max :Action {
     $c->stash->{image} = _scale($c->stash->{image}, $scale->{w}, $scale->{h}, 'max');
 }
 
-# scale max into given area cropping afterwards
+=head2 scale_fit :Action
+
+first scales an image by the maximum scaling factor needed to either match the
+desired width or height. Then, crops the image to make it fit the desired size.
+
+=cut
+
 sub scale_fit :Action {
     my ($self, $c) = @_;
 
@@ -470,7 +580,14 @@ sub scale_fit :Action {
     }
 }
 
-# scale min into given area filling with background color
+=head2 scale_max :Action
+
+scales an image by the minimum scaling factor needed to either match the
+desired width or height. Then, expand the image with white color to make it
+fit the desired size.
+
+=cut
+
 sub scale_fill :Action {
     my ($self, $c) = @_;
 
@@ -508,12 +625,26 @@ sub _scale {
     return scalar(keys(%options)) ? $image->scale(%options) : $image;
 }
 
-# examples
+################################################# MODIFIERs
+
+=head2 want_thumbnail :Action :Args(0)
+
+Logic for the 'thumbnail' modifier without further args. Sets the requested
+width and height to the C<thumbnail_size> configuration parameter (default is 80).
+
+=cut
+
 sub want_thumbnail :Action :Args(0) {
     my ($self, $c) = @_;
     
     $c->stash(scale => {w => $self->thumbnail_size, h => $self->thumbnail_size, mode => 'fill'});
 }
+
+=head2 want_w :Action :Args(1)
+
+Logic for the 'w' modifier with one arg. Sets the requested width of the image.
+
+=cut
 
 sub want_w :Action :Args(1) {
     my ($self, $c, $arg) = @_;
@@ -521,8 +652,14 @@ sub want_w :Action :Args(1) {
     die "width ($arg) must be numeric" if ($arg !~ m{\A \d+ \z}xms);
     die "width ($arg) out of range" if ($arg < 1 || $arg > $self->max_size);
     
-    $c->stash(scale => {w => $arg, mode => 'min'});
+    $c->stash(scale => {w => $arg, mode => 'fill'});
 }
+
+=head2 want_h :Action :Args(1)
+
+Logic for the 'h' modifier with one arg. Sets the requested height of the image.
+
+=cut
 
 sub want_h :Action :Args(1) {
     my ($self, $c, $arg) = @_;
@@ -530,7 +667,7 @@ sub want_h :Action :Args(1) {
     die "height ($arg) must be numeric" if ($arg !~ m{\A \d+ \z}xms);
     die "height ($arg) out of range" if ($arg < 1 || $arg > $self->max_size);
     
-    $c->stash(scale => {h => $arg, mode => 'min'});
+    $c->stash(scale => {h => $arg, mode => 'fill'});
 }
 
 =head1 AUTHOR
