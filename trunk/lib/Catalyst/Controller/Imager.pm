@@ -485,7 +485,7 @@ sub scale_fill :Action {
         $new_image->box(color => $bgcolor,
                         xmin => 0, ymin => 0,
                         xmax => $w, ymax => $h,
-                        fill => 1);
+                        filled => 1);
         my $l = int(($w - $image->getwidth) / 2);
         my $t = int(($h - $image->getheight) / 2);
         $c->stash->{image} = $new_image->compose(src => $image,

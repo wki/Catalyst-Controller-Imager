@@ -1,0 +1,8 @@
+Build
+Catalyst-Controller-Imager*
+Catalyst-Controller-Imager*/
+Makefile.PL
+Makefile
+_build/
+blib/
+t/cache/
