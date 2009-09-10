@@ -1,6 +1,7 @@
 package Catalyst::Controller::Imager;
 
 use Moose;
+use Moose::Util::TypeConstraints;
 # w/o BEGIN, :attrs will not work
 BEGIN { extends 'Catalyst::Controller'; }
 
@@ -8,7 +9,12 @@ BEGIN { extends 'Catalyst::Controller'; }
 use Imager;
 use MIME::Types;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
+
+subtype 'IntMax100'
+	=> as 'Int'
+	=> where { $_ > 0 && $_ <= 100 }
+	=> message { "the number $_ is not in range 1..100" };
 
 has root_dir       => (is => 'rw',
                        default => sub { 'static/images' } );
@@ -20,7 +26,10 @@ has max_size       => (is => 'rw',
                        default => sub { 1000 } );
 has thumbnail_size => (is => 'rw',
                        default => sub { 80 } );
-                       
+has jpeg_quality   => (is => 'rw',
+					   isa => 'IntMax100',
+                       default => 95 );
+
 =head1 NAME
 
 Catalyst::Controller::Imager - generate scaled or mangled images
@@ -160,6 +169,10 @@ A simple configuration of your Controller could look like this:
         # specify the size of thumbnails (always square)
         # defaults to 80 pixels
         thumbnail_size => 80,
+
+        # set jpeg quality
+        # defaults to 95
+        jpeg_quality => 95,
     );
 
 =head2 Caching
@@ -476,7 +489,9 @@ sub convert_image :Action {
         # create destination image format
         #
         my $data;
-        $c->stash->{image}->write(type => $c->stash->{format} || 'jpeg', data => \$data);
+        $c->stash->{image}->write(type => $c->stash->{format} || 'jpeg', 
+                                  jpegquality => $self->jpeg_quality,
+                                  data => \$data);
         $c->stash->{image_data} = $data;
 
         #
