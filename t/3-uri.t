@@ -1,4 +1,4 @@
-use Test::More tests => 16;
+use Test::More;
 use Test::Exception;
 use Image::Info qw(image_info image_type dim);
 use FindBin;
@@ -48,7 +48,7 @@ ok(length($content) > 10000, 'original length is OK');
 file_type_is('original/catalyst_logo.png', 'PNG');
 file_dimension_is('original/catalyst_logo.png', 171,244);
 
-
+done_testing;
 
 
 #################################################

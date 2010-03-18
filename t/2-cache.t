@@ -1,4 +1,4 @@
-use Test::More tests => 9;
+use Test::More;
 use Test::Exception;
 use Catalyst ();
 use Catalyst::Controller::Imager;
@@ -55,3 +55,4 @@ lives_ok { $controller->convert_image($c) }
          'file retrieval works';
 is($c->stash->{image_data}, 'cached content blabla', 'contend is from cache');
 
+done_testing;

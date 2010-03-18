@@ -1,10 +1,15 @@
 ---
 abstract: 'generate scaled or mangled images'
 author:
-  - 'Wolfgang Kinkeldei <wolfgang@kinkeldei.de>'
+  - 'Wolfgang Kinkeldei <wki@cpan.org>'
 build_requires:
   ExtUtils::MakeMaker: 6.42
-  Test::More: 0
+  Image::Info: 1.28
+  Test::Builder: 0.86
+  Test::Builder::Tester: 1.18
+  Test::Exception: 0.27
+  Test::Harness: 3.14
+  Test::More: 0.86
 configure_requires:
   ExtUtils::MakeMaker: 6.42
 distribution_type: module
@@ -18,6 +23,14 @@ no_index:
   directory:
     - inc
     - t
+requires:
+  Catalyst::Runtime: 5.80
+  FindBin: 1.47
+  Imager: 0.72
+  Moose: 0.74
+  Path::Class: 0.16
+  perl: 5.8.0
 resources:
   license: http://dev.perl.org/licenses/
+  repository: http://github.com/wki/Catalyst-Controller-Imager.git
 version: 0.02
