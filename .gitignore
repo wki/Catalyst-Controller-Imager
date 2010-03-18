@@ -1,8 +1,7 @@
-Build
 Catalyst-Controller-Imager*
 Catalyst-Controller-Imager*/
-Makefile.PL
 Makefile
-_build/
 blib/
 t/cache/
+inc/
+pm_to_blib

@@ -8,7 +8,7 @@ BEGIN { extends 'Catalyst::Controller'; }
 use Imager;
 use MIME::Types;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 has root_dir       => (is => 'rw',
                        default => sub { 'static/images' } );
@@ -580,7 +580,7 @@ sub scale_fit :Action {
     }
 }
 
-=head2 scale_max :Action
+=head2 scale_fill :Action
 
 scales an image by the minimum scaling factor needed to either match the
 desired width or height. Then, expand the image with white color to make it
@@ -622,7 +622,7 @@ sub _scale {
     );
     $options{type} = $type || 'min' if ($w && $h);
 
-    return scalar(keys(%options)) ? $image->scale(%options) : $image;
+    return scalar(keys(%options)) ? $image->scale(qtype => 'mixing', %options) : $image;
 }
 
 ################################################# MODIFIERs
