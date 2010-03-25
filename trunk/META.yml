@@ -1,12 +1,21 @@
 ---
-name: Catalyst-Controller-Imager
-version: 0.01
+abstract: 'generate scaled or mangled images'
 author:
   - 'Wolfgang Kinkeldei <wki@cpan.org>'
-abstract: generate scaled or mangled images
+configure_requires:
+  Module::Build: 0.36
+generated_by: 'Module::Build version 0.3601'
 license: perl
-resources:
-  license: http://dev.perl.org/licenses/
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Catalyst-Controller-Imager
+provides:
+  Catalyst::Controller::Imager:
+    file: lib/Catalyst/Controller/Imager.pm
+    version: 0.02
+  Catalyst::Helper::Controller::Imager:
+    file: lib/Catalyst/Helper/Controller/Imager.pm
 requires:
   Catalyst::Runtime: 5.80
   FindBin: 1.47
@@ -19,14 +28,6 @@ requires:
   Test::Exception: 0.27
   Test::Harness: 3.14
   Test::More: 0.86
-  perl: 5.8.8
-provides:
-  Catalyst::Controller::Imager:
-    file: lib/Catalyst/Controller/Imager.pm
-    version: 0.01
-  Catalyst::Helper::Controller::Imager:
-    file: lib/Catalyst/Helper/Controller/Imager.pm
-generated_by: Module::Build version 0.33
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+resources:
+  license: http://dev.perl.org/licenses/
+version: 0.02

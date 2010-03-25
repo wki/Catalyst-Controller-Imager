@@ -5,7 +5,6 @@ my $build = Module::Build->new(
     license => 'perl',
     dist_author => 'Wolfgang Kinkeldei <wki@cpan.org>',
     requires => {
-        'perl'                  => '5.8.8',
         'Moose'                 => '0.74',
         'Catalyst::Runtime'     => '5.80',
         'Path::Class'           => '0.16',
@@ -17,6 +16,7 @@ my $build = Module::Build->new(
         'Test::Harness'         => '3.14',
         'Imager'                => '0.67',
         'Image::Info'           => '1.28',  # needed for testing only...
+        'MIME::Types'           => '1.28', 
     },
     create_makefile_pl => 'traditional',
     create_readme => 1,
