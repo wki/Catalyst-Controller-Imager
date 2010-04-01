@@ -8,7 +8,6 @@ README
 t/0-basic.t
 t/2-cache.t
 t/3-uri.t
-t/cache/catalyst_logo.png
 t/lib/TestApp.pm
 t/lib/TestApp/Controller/Image.pm
 t/root/static/images/catalyst_logo.png

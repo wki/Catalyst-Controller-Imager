@@ -1,4 +1,4 @@
-use Test::More tests => 65;
+use Test::More;
 use Test::Exception;
 use Catalyst ();
 use FindBin;
@@ -159,6 +159,7 @@ foreach my $test_case (@test_cases) {
     file_dimension_is($name, @{$test_case->{dim}});
 }
 
+done_testing;
 
 #################################################
 #
