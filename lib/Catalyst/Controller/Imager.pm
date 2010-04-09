@@ -9,12 +9,10 @@ BEGIN { extends 'Catalyst::Controller'; }
 use Imager;
 use MIME::Types;
 
-our $VERSION = '0.02';
-
 subtype 'IntMax100'
-	=> as 'Int'
-	=> where { $_ > 0 && $_ <= 100 }
-	=> message { "the number $_ is not in range 1..100" };
+    => as 'Int'
+    => where { $_ > 0 && $_ <= 100 }
+    => message { "the number $_ is not in range 1..100" };
 
 has root_dir       => (is => 'rw',
                        default => sub { 'static/images' } );
@@ -27,7 +25,7 @@ has max_size       => (is => 'rw',
 has thumbnail_size => (is => 'rw',
                        default => sub { 80 } );
 has jpeg_quality   => (is => 'rw',
-					   isa => 'IntMax100',
+                       isa => 'IntMax100',
                        default => 95 );
 
 =head1 NAME
