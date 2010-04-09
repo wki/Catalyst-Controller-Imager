@@ -1,5 +1,8 @@
 Revision history for Catalyst-Controller-Imager
 
+        2010-04-09
+        * switched to Dist::Zilla
+        
 0.02    2010-03-18 
         * changed scale type to 'mixing' 
           improves very small thumbnail's quality
