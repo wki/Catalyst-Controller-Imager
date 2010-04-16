@@ -8,7 +8,7 @@ Catalyst::Helper::Controller::Imager - Helper for Imager Controllers
 
 =head1 SYNOPSIS
 
-    script/create.pl view Image Imager
+    script/create.pl controller Image Imager
 
 =head1 DESCRIPTION
 
@@ -24,13 +24,7 @@ sub mk_compclass {
     my ( $self, $helper ) = @_;
     my $file = $helper->{file};
     
-    $helper->render_file( 'compclass', $file, 
-                          {
-                              ext       => $ext,
-                              mimetype  => $mimetype,
-                              minifier  => $minifier,
-                              depend    => $depend,
-                          } );
+    $helper->render_file( 'compclass', $file, {} );
 }
 
 =head1 SEE ALSO
@@ -70,13 +64,18 @@ __PACKAGE__->config(
     # specify a maximum value for width and height of images
     # defaults to 1000 pixels
     #max_size => 1000,
+    
+	# specify a typical size for thumnnails (/thumbnail/ in URI-path)
+	# defaults to 80 x 80 square
+	#thumbnail_size => 80,
         
-    # maintain a list of allowed formats
-    # as a list of file-extensions
-    # default: jpg, gif and png
-    #allowed_formats => [qw(jpg gif png)],
-        
-    ### TODO: imager_options
+    # specify a default format
+    # default: jpg
+    #default_format => 'jpg',
+
+    # in case of jpeg, specify quality in percent
+	# default: 95%
+	# jpeg_quality => 95,
 );
 
 =head1 NAME
@@ -91,18 +90,19 @@ Imager Controller for [% app %].
 
 =cut
 
-=head2 index
-
-generate an image
-
-=cut
-
-sub index :Local :Args() {
-    my ( $self, $c, @args ) = @_;
-    # whatever we need to do here
-    
-    $c->detach('generate_image', @args); # will this work???
-}
+# uncomment if you like to change default behavior
+# =head2 index
+# 
+# generate an image
+# 
+# =cut
+# 
+# sub index :Local :Args() {
+#     my ( $self, $c, @args ) = @_;
+#     # whatever we need to do here
+#     
+#     $c->detach('generate_image', @args);
+# }
 
 =head1 SEE ALSO
 
