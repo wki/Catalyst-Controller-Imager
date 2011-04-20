@@ -74,7 +74,6 @@ is($controller->thumbnail_size, 80,              'default thumbnail size looks g
 %{ $c->stash } = ();
 is_deeply($c->stash, {}, 'stash is empty');
 lives_ok { $controller->base($c) } 'base() can be called';
-# lives_ok { $c->forward('base') } 'base() can be called';
 is_deeply($c->stash, 
           { 
               image_path   => [],
@@ -116,7 +115,7 @@ my @test_cases = (
     { format => 'jpeg', scale => {w => undef, h => undef, mode => 'min'},
       type   => 'JPEG', dim => [171,244], size => 1000 },
     { format => 'gif',  scale => {w => undef, h => undef, mode => 'min'},
-      type   => 'GIF',  dim => [171,244], size => 10000 },
+      type   => 'GIF',  dim => [171,244], size => 8000 },
 
     # width set, different formats
     { format => 'png',  scale => {w => 200, h => undef, mode => 'min'},
@@ -132,7 +131,7 @@ my @test_cases = (
     { format => 'jpeg', scale => {w => undef, h => 200, mode => 'min'},
       type   => 'JPEG', dim => [140,200], size => 1000 },
     { format => 'gif',  scale => {w => undef, h => 200, mode => 'min'},
-      type   => 'GIF',  dim => [140,200], size => 10000 },
+      type   => 'GIF',  dim => [140,200], size => 5000 },
 
     # width+height set, oversized width
     { format => 'png',  scale => {w => 400, h => 150, mode => 'min'},
@@ -140,7 +139,7 @@ my @test_cases = (
     { format => 'jpeg', scale => {w => 400, h => 150, mode => 'min'},
       type   => 'JPEG', dim => [105,150], size => 1000 },
     { format => 'gif',  scale => {w => 400, h => 150, mode => 'min'},
-      type   => 'GIF',  dim => [105,150], size => 10000 },
+      type   => 'GIF',  dim => [105,150], size => 20000 },
 );
 
 foreach my $test_case (@test_cases) {
@@ -154,7 +153,7 @@ foreach my $test_case (@test_cases) {
 
     lives_ok { $controller->convert_image($c) }
              "$name lives";
-    ok(length($c->stash->{image_data}) > $test_case->{size}, "$name size is reasonable");
+    ok(length($c->stash->{image_data}) > $test_case->{size}, "$name size is reasonable (${\length($c->stash->{image_data})} > $test_case->{size})");
     file_type_is($name, $test_case->{type});
     file_dimension_is($name, @{$test_case->{dim}});
 }
