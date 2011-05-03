@@ -139,7 +139,7 @@ my @test_cases = (
     { format => 'jpeg', scale => {w => 400, h => 150, mode => 'min'},
       type   => 'JPEG', dim => [105,150], size => 1000 },
     { format => 'gif',  scale => {w => 400, h => 150, mode => 'min'},
-      type   => 'GIF',  dim => [105,150], size => 20000 },
+      type   => 'GIF',  dim => [105,150], size => 6000 },
 );
 
 foreach my $test_case (@test_cases) {

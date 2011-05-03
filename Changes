@@ -1,5 +1,10 @@
 Revision history for Catalyst-Controller-Imager
 
+
+0.03    2011-05-03
+        * changed size-test limits for gif files,
+          some tests failed with certain gif-libs
+
         2010-04-09
         * switched to Dist::Zilla
         
