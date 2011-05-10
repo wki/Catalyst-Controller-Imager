@@ -1,5 +1,9 @@
 Revision history for Catalyst-Controller-Imager
 
+0.04    2011-05-10
+        * modified Makefile.PL to avoid running CPAN Testers
+          reason: Imager must be configured with gif, jpeg and png support 
+          which is not the default but makes sense for a web environment.
 
 0.03    2011-05-03
         * changed size-test limits for gif files,

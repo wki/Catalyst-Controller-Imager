@@ -683,6 +683,13 @@ sub want_h :Action :Args(1) {
     $c->stash(scale => {h => $arg, mode => 'fill'});
 }
 
+=head1 BUGS
+
+probably many... Don't get confused if tests fail and carefully read the
+messages. The test-suite only will pass if Imager is configured with gif, jpeg
+and png support. In doubt install the required binary libraries and reinstall
+Imager.
+
 =head1 AUTHOR
 
 Wolfgang Kinkeldei, E<lt>wolfgang@kinkeldei.deE<gt>
