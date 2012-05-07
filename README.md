@@ -35,3 +35,27 @@ where modifier can be a simple rule like
 
 Every image is calculated on-the-fly and optionally cached for faster access
 next time.
+
+In order to get this module installed you will need the C-libraries
+for converting various image formats.
+
+On an OS-X box using MacPorts, please install:
+
+ * giflib +no_x11
+
+ * jpeg
+ 
+ * libpng
+ 
+ * tiff
+
+On a debian-based Linux Machine, install:
+
+ * libgif4
+ 
+ * libjpeg8
+ 
+ * libpng12
+ 
+ * libtiff4
+ 
