@@ -422,7 +422,8 @@ sub image :Chained('scale') :PathPart('') :Args {
     
     # find real image file by stripping extensions
     while (!-f $c->path_to('root', $self->root_dir, @path, $file_name)) {
-        die 'requested image file ' . join('/', @path) . ' not found' if ($file_name !~ s{\. \w+ \z}{}xms);
+        die 'requested image file "' . join('/', @path, $file_name) . '" not found'
+            if $file_name !~ s{\. \w+ \z}{}xms;
     }
     
     push @{$c->stash->{image_path}}, @path, $file_name;

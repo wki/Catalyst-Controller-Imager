@@ -1,5 +1,9 @@
 Revision history for Catalyst-Controller-Imager
 
+0.05    2013-02-22
+        * added the requested file path to the error message in case a file
+          was not found [Alexander Kohsiek]
+
         2011-11-26
         * bumped Imager version to 0.86 and expanded requirements by
           Imager::File::(GIF|JPEG|PNG) in order to give proper feedback
