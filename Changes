@@ -1,5 +1,10 @@
 Revision history for Catalyst-Controller-Imager
 
+0.06    2014-01-12
+        * added a mocked $c->stash() method to make failing tests work again
+        * stringified MIME content-type value to avoid errors in latest
+          Catalyst version
+
 0.05    2013-02-22
         * added the requested file path to the error message in case a file
           was not found [Alexander Kohsiek]
@@ -11,7 +16,7 @@ Revision history for Catalyst-Controller-Imager
 
 0.04    2011-05-10
         * modified Makefile.PL to avoid running CPAN Testers
-          reason: Imager must be configured with gif, jpeg and png support 
+          reason: Imager must be configured with gif, jpeg and png support
           which is not the default but makes sense for a web environment.
 
 0.03    2011-05-03
@@ -20,9 +25,9 @@ Revision history for Catalyst-Controller-Imager
 
         2010-04-09
         * switched to Dist::Zilla
-        
-0.02    2010-03-18 
-        * changed scale type to 'mixing' 
+
+0.02    2010-03-18
+        * changed scale type to 'mixing'
           improves very small thumbnail's quality
           no visual changes for other sizes
         * typo changes in docs

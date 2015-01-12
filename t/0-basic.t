@@ -13,12 +13,33 @@ $c->setup_home("$FindBin::Bin");
 
 {
     no warnings;
+    
     # patch our Catalyst environment for testing
     package Catalyst;
+    my %stash;
+    use Moose;
+    no warnings;
+    __PACKAGE__->meta->make_mutable;
     sub forward {
         my ($c, $action, @args) = @_;
         $action->{code}->($action->{self}, $c, @args);
+    }
+    sub stash {
+        my $self = shift;
+        while (@_) {
+            my $key = shift;
+            my $value = shift;
+            $stash{$key} = $value;
+        }
+        
+        return \%stash;
+    }
+    around dispatch => sub {
+        my $orig = shift;
+        %stash = ();
+        $orig->dispatch(@_);
     };
+    __PACKAGE__->meta->make_immutable;
     
     package Catalyst::Controller::Imager;
     sub action_for {

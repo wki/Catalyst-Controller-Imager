@@ -533,7 +533,7 @@ sub end :Action {
     } else {
         my $types = MIME::Types->new();
         my $mime = $types->mimeTypeOf($c->stash->{format});
-        $c->response->headers->content_type($mime || 'image/unknown');
+        $c->response->headers->content_type("$mime" || 'image/unknown');
         $c->response->body($c->stash->{image_data});
     }
 }

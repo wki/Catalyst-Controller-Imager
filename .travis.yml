@@ -1,16 +1,19 @@
 language: perl
 
 perl:
+   - "5.20"
+   - "5.18"
    - "5.16"
    - "5.14"
    - "5.12"
    - "5.10"
 
 before_install:
+   - sudo apt-get-update -qq
+   - sudo apt-get install -qq libgif4-devel libjpeg8-devel libpng12-devel libtiff4-devel
    # Prevent "Please tell me who you are" errors for certain DZIL configs
    - git config --global user.name "TravisCI"
    - git config --global user.email $HOSTNAME":not-for-mail@travis-ci.org"
-   - sudo apt-get install libgif-dev libjpeg-dev libpng-dev libtiff-dev
 
 install:
    # Deal with all of the DZIL dependancies, quickly and quietly
