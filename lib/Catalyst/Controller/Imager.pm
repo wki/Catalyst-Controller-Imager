@@ -329,6 +329,9 @@ you may build these action methods:
 
 =cut
 
+=head2 BUILD
+=cut
+
 sub BUILD {
     my $self = shift;
     my $c = $self->_app;
@@ -594,7 +597,7 @@ sub scale_fit :Action {
     }
 }
 
-=head2 scale_max :Action
+=head2 scale_fill :Action
 
 scales an image by the minimum scaling factor needed to either match the
 desired width or height. Then, expand the image with white color to make it
