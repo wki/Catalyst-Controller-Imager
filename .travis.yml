@@ -10,7 +10,7 @@ perl:
 
 before_install:
    - sudo apt-get update -qq
-   - sudo apt-get install -qq libgif4 libjpeg8 libpng12 libtiff4
+   - sudo apt-get install -qq libgif4-dev libjpeg8-dev libpng12-0-dev libtiff4-dev
    # Prevent "Please tell me who you are" errors for certain DZIL configs
    - git config --global user.name "TravisCI"
    - git config --global user.email $HOSTNAME":not-for-mail@travis-ci.org"
